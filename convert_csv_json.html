@@ -1,0 +1,95 @@
+<body>
+
+<div>
+  <p>Download airport_frequencies.csv from https://ourairports.com/data/ and select it here:</p>
+  <input id="csv" type="file" accept=".csv">
+</div>
+<pre id="out"><p>Result will be shown here</p></pre>
+
+<script>
+// CSV source: https://ourairports.com/data/
+
+// This assumes no commas in the values names.
+function getCsvValuesFromLine(line) {
+	var values = line.split(',');
+	values = values.map(function(value){
+		return value.replace(/\"/g, '');
+	});
+	return values;
+}
+
+function fixFrequency(freq) {
+	var result = freq;
+	if (result.length == 3) {
+		result += '.';
+	}
+	result = result.padEnd(7, 0);
+	return result;
+}
+
+function addFrequency(freq, target) {
+	if (target[freq['airport_ident']] != null) {
+		console.log('Duplicate found, skipping: ' + freq['type'] + ' ' + freq['airport_ident']);
+		// target[freq['airport_ident']] = '';
+	} else {
+		target[freq['airport_ident']] = fixFrequency(freq['frequency_mhz']);
+	}
+}
+
+const fileInput = document.getElementById('csv');
+
+var parsed = null;
+
+const readFile = () => {
+  const reader = new FileReader()
+  reader.onload = () => {
+	var lines = reader.result.split('\n');
+	
+	var headers = getCsvValuesFromLine(lines[0]);
+	lines.shift(); // remove header line from array
+	freqs = lines.map(function(line) {
+		var entry = {};
+		var lineValues = getCsvValuesFromLine(line);
+		for (var i = 0; i < lineValues.length; i += 1) {
+			entry[headers[i]] = lineValues[i];
+		}
+		return entry;
+	});
+
+	
+	var ctaf = {};
+	var twr = {};
+	
+	freqs
+	.filter((freq) => freq['airport_ident'] != null && freq['airport_ident'].length == 4 && (
+		freq['airport_ident'].startsWith('K')
+		|| freq['airport_ident'].startsWith('N')
+		|| freq['airport_ident'].startsWith('P') 
+		|| freq['airport_ident'].startsWith('T')
+		))
+	.forEach((freq) => {
+		if (freq['type'].includes('CTAF') 
+			|| (freq['type'].includes('UNIC') && freq['description'].includes('CTAF'))) {
+			addFrequency(freq, ctaf);
+		} else if (freq['type'] == 'TWR') {
+			addFrequency(freq, twr);
+		}
+	});
+		
+	var result = {
+		updated: new Date().toISOString(),
+		credits: 'https://ourairports.com/data/ only for flight simulation use',
+		ctaf: ctaf,
+		twr: twr
+	};
+
+    document.getElementById('out').innerHTML = JSON.stringify(result) + '<br/><br/>';
+  }
+  // start reading the file. When it is done, calls the onload event defined above.
+  reader.readAsBinaryString(fileInput.files[0])
+}
+
+fileInput.addEventListener('change', readFile)
+</script>
+
+</body>
